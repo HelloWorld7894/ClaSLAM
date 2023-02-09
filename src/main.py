@@ -102,6 +102,13 @@ def Slice_image(image_in, strides):
     return image_in
 
 def CalculateAngle(line):
+    """
+    calculate angle of one line
+
+    IN: line input from houghlines (i guess)
+    OUT: angle
+    """
+
     d_x = line[0][0] - line[1][0]
     d_y = line[0][1] - line[1][1]
 
@@ -114,6 +121,27 @@ def CalculateAngle(line):
 
 def GroupLines(lines):
     pass #TODO: dodělat!
+
+def WeightedArrays(arrays, mask = []):
+    """
+    sum two or more arrays together, if mask is not specified, it will be just a sum :)
+    IN: list(arrays), mask(len=len(arrays))
+    OUT: sum
+    """
+    
+    if len(mask) == 0: mask = [1] * len(arrays)
+
+    Sum = [0, 0, 0]
+
+    for i in range(3):
+        for i_arr in range(len(arrays)):
+            Sum[i] += mask[i] * arrays[i_arr][i]
+
+        Sum[i] = int(Sum[i] / 3)
+
+    return Sum
+            
+            
 
 #main code
 
@@ -162,51 +190,95 @@ while(True):
 
     max_angle_diff = 7.5
     KeyFunc = lambda elem : elem[2]
-    lines_grouped = []
-    group = []
 
     lines.sort(key=KeyFunc)
-
-    i = 0
-    while i < len(lines):
-        i2 = 0
-        while abs(lines[i + i2][2] - lines[i + i2 + 1][2]) <= max_angle_diff:
-            if i2 == 0: group.append(lines[i + i2], lines[i + i2 + 1])
-            else: group.append(lines[i + i2 + 1])
-            
-            i2 += 1
-        i += i2
-
-        if len(group) == 0:
-            lines_grouped.append(lines[i])
-        else:
-            #making mean out of it
-            line = []
-            for mean_i in range(3):
-                if mean_i == 2:
-                    line.append(sum([elem[mean_i] for elem in group]) / len(group))
-                else:
-                    mx = sum(elem[mean_i][0] for elem in group) / len(group)
-                    my = sum(elem[mean_i][1] for elem in group) / len(group)
-                    line.append((mx, my))
-
-            lines_grouped.append(line)
-
-            line = []
-            group = []
-
-        i += 1
 
     
     
         
     
     print(lines)
-    print(lines_grouped)
+
+    #
+    # Cluster RGB thresholding
+    #
+    cluster_pix = img_cluster.flatten()
+    Range_Slice = int(cluster_pix.shape[0] / 3)
+    min_vals = []
+    target_arr = []
+    
+    #sort on Blue
+    Arr_B = np.zeros(Range_Slice, dtype=np.uint8)
+    for i in range(Range_Slice):
+        i_B = i * 3
+        Arr_B[i] = cluster_pix[i_B]
+
+    B_indices = np.argsort(Arr_B, axis=0)
+    B_min = np.where(B_indices==0)
+
+    #sort on Green
+    Arr_G = np.zeros(Range_Slice, dtype=np.uint8)
+    for i in range(Range_Slice):
+        i_G = i * 3 + 1
+        Arr_G[i] = cluster_pix[i_B]
+
+    G_indices = np.argsort(Arr_G, axis=0)
+    G_min = np.where(G_indices==0)
+
+    #sort on Red
+    Arr_R = np.zeros(Range_Slice, dtype=np.uint8)
+    for i in range(Range_Slice):
+        i_R = i * 3 + 2
+        Arr_R[i] = cluster_pix[i_B]
+
+    R_indices = np.argsort(Arr_R, axis=0)
+    R_min = np.where(R_indices==0) #returns index of minimal value (0)
+
+    # TODO: not working properly (REVIEW)
+    # Retrieve 3 lowest BGR intensities (B, G, R) - then, my really cool algorithm will choose
+    # (this is going to be abomination)
+    min_vals.extend([B_min, G_min, R_min])
+    target_arr.extend([Arr_B, Arr_G, Arr_R])
+
+    Pix_calc = [lambda x: (x+1, x+2), lambda x: (x+1, x-1), lambda x: (x-2, x-1)]
+
+    min_pixels = []
+    for i in range(3):
+        a, b = Pix_calc[i](i)
+
+        B = target_arr[i][min_vals[i][0][0]]
+        G = target_arr[a][min_vals[i][0][0]+1]
+        R = target_arr[b][min_vals[i][0][0]+2]
+
+        min_pixels.append([B, G, R])
+
+    print(min_pixels)
+
+    #
+    # weighted mean out of these 3 pixel intensities
+    #
+
+    Sum = WeightedArrays(min_pixels)
+    
+    #
+    # RGB thresholding
+    #
+    LowerBound = min_pixels[0]
+    print(LowerBound)
+    UpperBound = [255, 255, 255]
+
+    thresh = cv2.inRange(img_cluster, np.array(LowerBound, dtype=np.uint8), np.array(UpperBound, dtype=np.uint8))
+    img_thresh = cv2.bitwise_and(thresh, thresh)
+
+    #
+    # Apply Blur to get better results
+    #
+    kernel = np.ones((5,5),np.float32) / 25
+    img_thresh = cv2.filter2D(img_thresh, -1, kernel)
 
     #cv2.imshow("frame", frame)
     cv2.imshow("frame_canny", img_canny)
-    #cv2.imshow("frame_corners", corners)
+    cv2.imshow("frame_corners", img_thresh)
     cv2.imshow("frame_lines", blank)
     cv2.imshow("frame_K_means", img_cluster)
     if cv2.waitKey(1) & 0xFF == ord('q'):
