@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import math
+import imutils
 
 def K_Clustering(image, n_clusters):
     """
@@ -162,7 +163,7 @@ while(True):
 
     #clustering
     img = Adjust_Gamma(frame, 0.4)
-    img_cluster = K_Clustering(frame, 7) #TODO: maybe
+    img_cluster = K_Clustering(frame, 7)
 
     img_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
@@ -220,7 +221,7 @@ while(True):
     Arr_G = np.zeros(Range_Slice, dtype=np.uint8)
     for i in range(Range_Slice):
         i_G = i * 3 + 1
-        Arr_G[i] = cluster_pix[i_B]
+        Arr_G[i] = cluster_pix[i_G]
 
     G_indices = np.argsort(Arr_G, axis=0)
     G_min = np.where(G_indices==0)
@@ -229,14 +230,14 @@ while(True):
     Arr_R = np.zeros(Range_Slice, dtype=np.uint8)
     for i in range(Range_Slice):
         i_R = i * 3 + 2
-        Arr_R[i] = cluster_pix[i_B]
+        Arr_R[i] = cluster_pix[i_R]
 
     R_indices = np.argsort(Arr_R, axis=0)
     R_min = np.where(R_indices==0) #returns index of minimal value (0)
 
-    # TODO: not working properly (REVIEW)
+    #
     # Retrieve 3 lowest BGR intensities (B, G, R) - then, my really cool algorithm will choose
-    # (this is going to be abomination)
+    #
     min_vals.extend([B_min, G_min, R_min])
     target_arr.extend([Arr_B, Arr_G, Arr_R])
 
@@ -264,7 +265,6 @@ while(True):
     # RGB thresholding
     #
     LowerBound = min_pixels[0]
-    print(LowerBound)
     UpperBound = [255, 255, 255]
 
     thresh = cv2.inRange(img_cluster, np.array(LowerBound, dtype=np.uint8), np.array(UpperBound, dtype=np.uint8))
@@ -276,7 +276,24 @@ while(True):
     kernel = np.ones((5,5),np.float32) / 25
     img_thresh = cv2.filter2D(img_thresh, -1, kernel)
 
-    #cv2.imshow("frame", frame)
+    #
+    # Create Contours of binary image 
+    #
+    img_thresh[img_thresh != 0] = 255
+    
+    contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
+    print(len(contours))
+    
+    for c in contours:
+        # compute the center of the contour
+        M = cv2.moments(c)
+        cX = int(M["m10"] / M["m00"])
+        cY = int(M["m01"] / M["m00"])
+        # draw the contour and center of the shape on the image
+        cv2.circle(blank, (cX, cY), 7, (255, 255, 255), -1)
+        cv2.putText(blank, "center", (cX - 20, cY - 20),
+            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
+
     cv2.imshow("frame_canny", img_canny)
     cv2.imshow("frame_corners", img_thresh)
     cv2.imshow("frame_lines", blank)
