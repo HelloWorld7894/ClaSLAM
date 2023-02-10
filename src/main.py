@@ -3,6 +3,10 @@ import numpy as np
 import math
 import imutils
 
+#variable definitions
+haarcascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
+face_cascade = cv2.CascadeClassifier(haarcascade_path)
+
 def K_Clustering(image, n_clusters):
     """
     IN: BGR image, K (number of clusters)
@@ -58,13 +62,13 @@ def Adjust_Gamma(image, gamma):
     
     return cv2.LUT(image, table)
 
-def Automatic_Thresh(gray_image): #https://stackoverflow.com/questions/41893029/opencv-canny-edge-detection-not-working-properly
+def Automatic_Thresh(img): #https://stackoverflow.com/questions/41893029/opencv-canny-edge-detection-not-working-properly
     """
     IN: grayscale image
     OUT: lower, upper threshold (for edge detection and thresholding)
     """
 
-    v = np.median(gray_image)
+    v = np.median(img)
     sigma = 0.33
 
     #---- apply automatic Canny edge detection using the computed median----
@@ -72,6 +76,63 @@ def Automatic_Thresh(gray_image): #https://stackoverflow.com/questions/41893029/
     upper = int(min(255, (1.0 + sigma) * v))
     
     return lower, upper
+
+def RGB_Thresh(LowerBound, UpperBound, img):
+    """
+    IN: LowerBound (BGR), UpperBound
+    OUT: binary image
+    """
+
+    thresh = cv2.inRange(img, np.array(LowerBound, dtype=np.uint8), np.array(UpperBound, dtype=np.uint8))
+    img_thresh = cv2.bitwise_and(thresh, thresh)
+
+    return img_thresh
+
+def Automatic_Lowest_Thresh(img_cluster): #TODO: unstable as hell (CHANGE)
+    """
+    IN: BGR image
+    OUT: minimal values and target array (B, G, R flattened)
+
+    (if you want to get 3 lowest values, put RetrieveLowest function after this)
+    """
+
+    cluster_pix = img_cluster.flatten()
+    Range_Slice = int(cluster_pix.shape[0] / 3)
+    min_vals = []
+    target_arr = []
+    
+    #sort on Blue
+    Arr_B = np.zeros(Range_Slice, dtype=np.uint8)
+    for i in range(Range_Slice):
+        i_B = i * 3
+        Arr_B[i] = cluster_pix[i_B]
+
+    B_indices = np.argsort(Arr_B, axis=0)
+    B_min = np.where(B_indices==0)
+
+    #sort on Green
+    Arr_G = np.zeros(Range_Slice, dtype=np.uint8)
+    for i in range(Range_Slice):
+        i_G = i * 3 + 1
+        Arr_G[i] = cluster_pix[i_G]
+
+    G_indices = np.argsort(Arr_G, axis=0)
+    G_min = np.where(G_indices==0)
+
+    #sort on Red
+    Arr_R = np.zeros(Range_Slice, dtype=np.uint8)
+    for i in range(Range_Slice):
+        i_R = i * 3 + 2
+        Arr_R[i] = cluster_pix[i_R]
+
+    R_indices = np.argsort(Arr_R, axis=0)
+    R_min = np.where(R_indices==0) #returns index of minimal value (0)
+
+    min_vals.extend([B_min, G_min, R_min])
+    target_arr.extend([Arr_B, Arr_G, Arr_R])
+
+    return min_vals, target_arr
+
 
 def Detect_Corners(image_in, image_out):
     """
@@ -142,7 +203,41 @@ def WeightedArrays(arrays, mask = []):
 
     return Sum
             
-            
+def RetrieveLowest(min_vals, target_arr):
+    """
+    Retrieve 3 lowest values in target array
+    IN: min_vals (len = 3), target_arr (len = 3)
+    OUT: 3 lowest pixels in python list
+    """
+
+    Pix_calc = [lambda x: (x+1, x+2), lambda x: (x+1, x-1), lambda x: (x-2, x-1)]
+
+    min_pixels = []
+    for i in range(3):
+        a, b = Pix_calc[i](i)
+
+        B = target_arr[i][min_vals[i][0][0]]
+
+        if min_vals[i][0][0]+1 == len(target_arr[a]): #index does not exists (how does that happen? TODO)
+            G = B
+            R = B
+
+        else:
+            G = target_arr[a][min_vals[i][0][0]+1]
+            R = target_arr[b][min_vals[i][0][0]+2]
+
+        min_pixels.append([B, G, R])
+
+    return min_pixels
+
+def Haarcascade(img_gray, img_out):
+    
+
+    results = face_cascade.detectMultiScale(img_gray, 1.3, 5)
+    for (x,y,w,h) in results:
+        cv2.rectangle(img_out,(x,y),(x+w,y+h),(0,255,0),2)
+
+    return img_out
 
 #main code
 
@@ -158,7 +253,7 @@ while(True):
     frame = cv2.GaussianBlur(frame, (3, 3), 0)
 
     #
-    # Generating Canny, Harris and K-Means
+    # Generating Canny, Harris and K-Means (1)
     #
 
     #clustering
@@ -177,13 +272,13 @@ while(True):
     corners = Detect_Corners(img_gray, corners)
 
     #
-    # Fitting lines through interest points
+    # Fitting lines through interest points (2)
     #
 
     blank, lines = HoughLines(img_canny, blank, (0, 0, 255))
 
     #
-    # Line grouping by difference of angle and distance
+    # Line grouping by difference of angle and distance (3)
     #
 
     for line in lines:
@@ -201,59 +296,20 @@ while(True):
     print(lines)
 
     #
+    # Filtering Faces (4)
+    #
+    blank = Haarcascade(img_gray, blank)
+
+
+    #
     # Cluster RGB thresholding
     #
-    cluster_pix = img_cluster.flatten()
-    Range_Slice = int(cluster_pix.shape[0] / 3)
-    min_vals = []
-    target_arr = []
-    
-    #sort on Blue
-    Arr_B = np.zeros(Range_Slice, dtype=np.uint8)
-    for i in range(Range_Slice):
-        i_B = i * 3
-        Arr_B[i] = cluster_pix[i_B]
-
-    B_indices = np.argsort(Arr_B, axis=0)
-    B_min = np.where(B_indices==0)
-
-    #sort on Green
-    Arr_G = np.zeros(Range_Slice, dtype=np.uint8)
-    for i in range(Range_Slice):
-        i_G = i * 3 + 1
-        Arr_G[i] = cluster_pix[i_G]
-
-    G_indices = np.argsort(Arr_G, axis=0)
-    G_min = np.where(G_indices==0)
-
-    #sort on Red
-    Arr_R = np.zeros(Range_Slice, dtype=np.uint8)
-    for i in range(Range_Slice):
-        i_R = i * 3 + 2
-        Arr_R[i] = cluster_pix[i_R]
-
-    R_indices = np.argsort(Arr_R, axis=0)
-    R_min = np.where(R_indices==0) #returns index of minimal value (0)
+    min_vals, target_arr = Automatic_Lowest_Thresh(img_cluster)
 
     #
     # Retrieve 3 lowest BGR intensities (B, G, R) - then, my really cool algorithm will choose
     #
-    min_vals.extend([B_min, G_min, R_min])
-    target_arr.extend([Arr_B, Arr_G, Arr_R])
-
-    Pix_calc = [lambda x: (x+1, x+2), lambda x: (x+1, x-1), lambda x: (x-2, x-1)]
-
-    min_pixels = []
-    for i in range(3):
-        a, b = Pix_calc[i](i)
-
-        B = target_arr[i][min_vals[i][0][0]]
-        G = target_arr[a][min_vals[i][0][0]+1]
-        R = target_arr[b][min_vals[i][0][0]+2]
-
-        min_pixels.append([B, G, R])
-
-    print(min_pixels)
+    min_pixels = RetrieveLowest(min_vals, target_arr) #TODO: unstable (flashing lights)
 
     #
     # weighted mean out of these 3 pixel intensities
@@ -264,25 +320,28 @@ while(True):
     #
     # RGB thresholding
     #
-    LowerBound = min_pixels[0]
+    LowerBound = min_pixels[2]
     UpperBound = [255, 255, 255]
 
-    thresh = cv2.inRange(img_cluster, np.array(LowerBound, dtype=np.uint8), np.array(UpperBound, dtype=np.uint8))
-    img_thresh = cv2.bitwise_and(thresh, thresh)
+    #LowerBound, UpperBound = Automatic_Thresh(img_cluster)
+
+    img_thresh = RGB_Thresh(LowerBound, UpperBound, img_cluster)
 
     #
     # Apply Blur to get better results
     #
     kernel = np.ones((5,5),np.float32) / 25
     img_thresh = cv2.filter2D(img_thresh, -1, kernel)
+    img_thresh[img_thresh != 0] = 255
+
+    #
+    # Apply some kind of 
+    #
 
     #
     # Create Contours of binary image 
     #
-    img_thresh[img_thresh != 0] = 255
-    
     contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
-    print(len(contours))
     
     for c in contours:
         # compute the center of the contour
