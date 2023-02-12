@@ -287,7 +287,7 @@ while(True):
     
         
     
-    print(lines)
+    #print(lines)
 
     #
     # Cluster RGB thresholding
@@ -303,7 +303,7 @@ while(True):
     # weighted mean out of these 3 pixel intensities
     #
 
-    Sum = WeightedArrays(min_pixels)
+    #Sum = WeightedArrays(min_pixels) #useless
     
     #
     # RGB thresholding
@@ -321,10 +321,6 @@ while(True):
     kernel = np.ones((5,5),np.float32) / 25
     img_thresh = cv2.filter2D(img_thresh, -1, kernel)
     img_thresh[img_thresh != 0] = 255
-
-    #
-    # Apply some kind of 
-    #
 
     #
     # Create Contours of binary image 
