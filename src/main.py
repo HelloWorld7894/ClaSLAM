@@ -1,7 +1,7 @@
 import cv2
 import numpy as np
 import math
-import imutils
+import FaceDetect
 
 #variable definitions
 haarcascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
@@ -230,15 +230,6 @@ def RetrieveLowest(min_vals, target_arr):
 
     return min_pixels
 
-def Haarcascade(img_gray, img_out):
-    
-
-    results = face_cascade.detectMultiScale(img_gray, 1.3, 5)
-    for (x,y,w,h) in results:
-        cv2.rectangle(img_out,(x,y),(x+w,y+h),(0,255,0),2)
-
-    return img_out
-
 #main code
 
 vid = cv2.VideoCapture(0)
@@ -261,6 +252,9 @@ while(True):
     img_cluster = K_Clustering(frame, 7)
 
     img_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+
+    #sometimes, human faces have different brightness (in clusters), so by using haarcascaddes, we are going to filter faces out
+    img_cluster = FaceDetect.detectFace(img_cluster)
 
     #edge detection
     upper, lower = Automatic_Thresh(img_gray)
@@ -294,12 +288,6 @@ while(True):
         
     
     print(lines)
-
-    #
-    # Filtering Faces (4)
-    #
-    blank = Haarcascade(img_gray, blank)
-
 
     #
     # Cluster RGB thresholding
