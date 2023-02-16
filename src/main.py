@@ -8,6 +8,7 @@ haarcascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(haarcascade_path)
 img_buffer = []
 buffer_out = None #out image from img_buffer
+group_len = 5
 
 def K_Clustering(image, n_clusters):
     """
@@ -256,7 +257,7 @@ while(True):
     img_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     #sometimes, human faces have different brightness (in clusters), so by using haarcascaddes, we are going to filter faces out
-    img_cluster = FaceDetect.detectFace(frame, img_cluster)
+    #img_cluster = FaceDetect.detectFace(frame, img_cluster)
 
     #edge detection
     upper, lower = Automatic_Thresh(img_gray)
@@ -270,7 +271,8 @@ while(True):
     #
     # Fitting lines through interest points (2)
     #
-
+    print(img_canny.shape)
+    print(img_canny.dtype)
     blank, lines = HoughLines(img_canny, blank, (0, 0, 255))
 
     #
@@ -326,25 +328,36 @@ while(True):
 
     buffer_out = img_thresh.copy()
 
-    """
+    
     #
     # Create a buffer of 3 thresholded images, which we mask together (because for some reason, the image stream is somethimes flashing a white image only)
     #
-
-    if len(img_buffer) < 3:
+    """
+    if len(img_buffer) < group_len:
         img_buffer.append(img_thresh)
 
-    if len(img_buffer) == 3:
+    if len(img_buffer) == group_len:
         for img_i in range(len(img_buffer) - 1):
             Compare_buf = cv2.bitwise_or(img_buffer[img_i], img_buffer[img_i + 1])
             buffer_out = cv2.bitwise_or(Compare_buf, buffer_out)
     """
 
     #
+    # Ignore white-only and black-only images
+    #
+
+    num_white = np.sum(img_thresh == 255)
+    num_black = np.sum(img_thresh == 0)
+    
+    if num_black == 0 or num_white == 0:
+        continue
+
+    #
     # Create Contours of binary image 
     #
     contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     
+    """ totally useless right now
     for c in contours:
         # compute the center of the contour
         M = cv2.moments(c)
@@ -354,17 +367,22 @@ while(True):
         cv2.circle(blank, (cX, cY), 7, (255, 255, 255), -1)
         cv2.putText(blank, "center", (cX - 20, cY - 20),
             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-
-    cv2.imshow("frame_canny", img_canny)
+    """
     
     """
-    if len(img_buffer) == 3:
+    if len(img_buffer) == group_len:
         cv2.imshow("frame_corners", buffer_out)
         img_buffer = []
     """
+
+    img_sobel = cv2.Sobel(src=img_thresh, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=3)
+    img_sobel = img_sobel.astype("uint8")
+
+    blank, lines = HoughLines(img_sobel, blank, (0, 0, 255))
         
     cv2.imshow("frame_lines", blank)
     cv2.imshow("frame_thresh", img_thresh)
-    cv2.imshow("frame_K_means", img_cluster)
+    cv2.imshow("frame_sobel", img_sobel)
+    #cv2.imshow("frame_K_means", img_cluster)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
