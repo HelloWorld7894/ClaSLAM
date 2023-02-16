@@ -233,6 +233,16 @@ def RetrieveLowest(min_vals, target_arr):
 
     return min_pixels
 
+def DrawLines(lines, img, lcolor):
+    """
+    IN: list of line objects ... ,[(y1, x1), (y2, x2), angle], ...
+    OUT: img with drawn lines
+    """
+
+    for line in lines:
+        cv2.line(img, line[0], line[1], lcolor, 3, cv2.LINE_AA)
+
+
 #main code
 
 vid = cv2.VideoCapture(0)
@@ -242,6 +252,7 @@ while(True):
 
     #creating blank images and other image manipulation
     blank = np.zeros(frame.shape)
+    blank2 = blank.copy()
     corners = np.zeros(frame.shape[:2], dtype=np.uint8)
 
     frame = cv2.GaussianBlur(frame, (3, 3), 0)
@@ -271,27 +282,7 @@ while(True):
     #
     # Fitting lines through interest points (2)
     #
-    print(img_canny.shape)
-    print(img_canny.dtype)
-    blank, lines = HoughLines(img_canny, blank, (0, 0, 255))
-
-    #
-    # Line grouping by difference of angle and distance (3)
-    #
-
-    for line in lines:
-        CalculateAngle(line)
-
-    max_angle_diff = 7.5
-    KeyFunc = lambda elem : elem[2]
-
-    lines.sort(key=KeyFunc)
-
-    
-    
-        
-    
-    #print(lines)
+    blank, lines1 = HoughLines(img_canny, blank, (0, 0, 255))
 
     #
     # Cluster RGB thresholding
@@ -328,20 +319,6 @@ while(True):
 
     buffer_out = img_thresh.copy()
 
-    
-    #
-    # Create a buffer of 3 thresholded images, which we mask together (because for some reason, the image stream is somethimes flashing a white image only)
-    #
-    """
-    if len(img_buffer) < group_len:
-        img_buffer.append(img_thresh)
-
-    if len(img_buffer) == group_len:
-        for img_i in range(len(img_buffer) - 1):
-            Compare_buf = cv2.bitwise_or(img_buffer[img_i], img_buffer[img_i + 1])
-            buffer_out = cv2.bitwise_or(Compare_buf, buffer_out)
-    """
-
     #
     # Ignore white-only and black-only images
     #
@@ -357,30 +334,94 @@ while(True):
     #
     contours, hierarchy = cv2.findContours(img_thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_NONE)
     
-    """ totally useless right now
-    for c in contours:
-        # compute the center of the contour
-        M = cv2.moments(c)
-        cX = int(M["m10"] / M["m00"])
-        cY = int(M["m01"] / M["m00"])
-        # draw the contour and center of the shape on the image
-        cv2.circle(blank, (cX, cY), 7, (255, 255, 255), -1)
-        cv2.putText(blank, "center", (cX - 20, cY - 20),
-            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
-    """
-    
-    """
-    if len(img_buffer) == group_len:
-        cv2.imshow("frame_corners", buffer_out)
-        img_buffer = []
-    """
+    #
+    # Sobel edge detection on thresholded image
+    #
 
     img_sobel = cv2.Sobel(src=img_thresh, ddepth=cv2.CV_64F, dx=1, dy=1, ksize=3)
     img_sobel = img_sobel.astype("uint8")
+    
+    #
+    # HoughLines on sobel image
+    #
 
-    blank, lines = HoughLines(img_sobel, blank, (0, 0, 255))
+    blank, lines2 = HoughLines(img_sobel, blank, (0, 0, 255))
+
+    #
+    # Line grouping by difference of angle and distance (3)
+    #
+    lines = lines1 + lines2
+    for line in lines:
+        CalculateAngle(line)
+
+    max_angle_diff = 5.0
+    max_dist_diff = 40
+    KeyFunc = lambda elem : elem[2]
+
+    lines.sort(key=KeyFunc)
+
+    lines_grouped = []
+    if len(lines) != 0:
+        #grouping (indentation hell incoming!)
+        for i_line in range(len(lines)-1):
+            if abs(abs(lines[i_line][2]) - abs(lines[i_line+1][2])) <= max_angle_diff:
+                x1_diff = abs(lines[i_line][0][0] - lines[i_line+1][0][0])
+                x2_diff = abs(lines[i_line][1][0] - lines[i_line+1][1][0])
+                y1_diff = abs(lines[i_line][0][1] - lines[i_line+1][0][1])
+                y2_diff = abs(lines[i_line][1][1] - lines[i_line+1][1][1])
+                
+                if (x1_diff <= max_dist_diff or x2_diff <= max_dist_diff) or (y1_diff <= max_dist_diff or y2_diff <= max_dist_diff):
+                    #similar angle and similar distance
+
+                    AlreadyInArray = False
+                    if len(lines_grouped) != 0:
+                        for line_group in lines_grouped:
+                            for line_g in line_group:
+                                if line_g[0] == lines[i_line][0] and line_g[1] == lines[i_line][1] and line_g[2] == lines[i_line][2]:
+                                    #line already in different group
+                                    line_group.append(lines[i_line+1])
+                                    AlreadyInArray = True
+                                    break
+                            if AlreadyInArray:
+                                break
+                    
+
+                    if not AlreadyInArray:
+                        #line not in different group
+                        lines_grouped.append([lines[i_line], lines[i_line+1]])
+                else:
+                    lines_grouped.append([lines[i_line]])
+            else:
+                lines_grouped.append([lines[i_line]])
+
+    #useless lines elimination
+    lines = []
+    for line_group in lines_grouped:
+        if len(line_group) == 1:
+            lines.append(line_group[0])
+        else:
+            #calculating mean out of a whole line group
+            x1 = 0
+            x2 = 0
+            y1 = 0
+            y2 = 0
+            angle = 0.0
+
+            for line in line_group:
+                x1 += line[0][0]
+                y1 += line[0][1]
+
+                x2 += line[1][0]
+                y2 += line[1][1]
+                angle += line[2]
+
+            line_new = [[round(x1 / len(line_group)), round(y1 / len(line_group))], [round(x2 / len(line_group)), round(y2 / len(line_group))], round(angle / len(line_group), 2)]
+            lines.append(line_new)
+    
+    DrawLines(lines, blank2, (255, 0, 0))
         
     cv2.imshow("frame_lines", blank)
+    cv2.imshow("frame_lines_grouped", blank2)
     cv2.imshow("frame_thresh", img_thresh)
     cv2.imshow("frame_sobel", img_sobel)
     #cv2.imshow("frame_K_means", img_cluster)
