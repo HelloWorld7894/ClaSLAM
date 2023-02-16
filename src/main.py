@@ -6,6 +6,8 @@ import FaceDetect
 #variable definitions
 haarcascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
 face_cascade = cv2.CascadeClassifier(haarcascade_path)
+img_buffer = []
+buffer_out = None #out image from img_buffer
 
 def K_Clustering(image, n_clusters):
     """
@@ -84,7 +86,7 @@ def RGB_Thresh(LowerBound, UpperBound, img):
     """
 
     thresh = cv2.inRange(img, np.array(LowerBound, dtype=np.uint8), np.array(UpperBound, dtype=np.uint8))
-    img_thresh = cv2.bitwise_and(thresh, thresh)
+    img_thresh = cv2.bitwise_not(thresh, thresh)
 
     return img_thresh
 
@@ -249,12 +251,12 @@ while(True):
 
     #clustering
     img = Adjust_Gamma(frame, 0.4)
-    img_cluster = K_Clustering(frame, 7)
+    img_cluster = K_Clustering(img, 7)
 
     img_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     #sometimes, human faces have different brightness (in clusters), so by using haarcascaddes, we are going to filter faces out
-    img_cluster = FaceDetect.detectFace(img_cluster)
+    img_cluster = FaceDetect.detectFace(frame, img_cluster)
 
     #edge detection
     upper, lower = Automatic_Thresh(img_gray)
@@ -318,9 +320,25 @@ while(True):
     #
     # Apply Blur to get better results
     #
-    kernel = np.ones((5,5),np.float32) / 25
+    kernel = np.ones((5,5),np.float32) #/ 25
     img_thresh = cv2.filter2D(img_thresh, -1, kernel)
     img_thresh[img_thresh != 0] = 255
+
+    buffer_out = img_thresh.copy()
+
+    """
+    #
+    # Create a buffer of 3 thresholded images, which we mask together (because for some reason, the image stream is somethimes flashing a white image only)
+    #
+
+    if len(img_buffer) < 3:
+        img_buffer.append(img_thresh)
+
+    if len(img_buffer) == 3:
+        for img_i in range(len(img_buffer) - 1):
+            Compare_buf = cv2.bitwise_or(img_buffer[img_i], img_buffer[img_i + 1])
+            buffer_out = cv2.bitwise_or(Compare_buf, buffer_out)
+    """
 
     #
     # Create Contours of binary image 
@@ -338,8 +356,15 @@ while(True):
             cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 2)
 
     cv2.imshow("frame_canny", img_canny)
-    cv2.imshow("frame_corners", img_thresh)
+    
+    """
+    if len(img_buffer) == 3:
+        cv2.imshow("frame_corners", buffer_out)
+        img_buffer = []
+    """
+        
     cv2.imshow("frame_lines", blank)
+    cv2.imshow("frame_thresh", img_thresh)
     cv2.imshow("frame_K_means", img_cluster)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
