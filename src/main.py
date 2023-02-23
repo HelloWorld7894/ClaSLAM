@@ -7,7 +7,7 @@ import math
 cap = cv2.VideoCapture(0)
 
 def Thresh(img):
-    thresh = 10
+    thresh = 50
     img[img > thresh] = 255
     img[img <= thresh] = 0
 
@@ -30,7 +30,7 @@ def HoughLines(img_in, img_out, mode):
                 cv2.line(img_out, pt1, pt2, (0,0,255), 3, cv2.LINE_AA)
 
     elif mode == "p":
-        linesP = cv2.HoughLinesP(img_in,rho = 1,theta = 1*np.pi/180,threshold = 100,minLineLength = 100,maxLineGap = 50)
+        linesP = cv2.HoughLinesP(img_in,rho = 1,theta = 1*np.pi/180,threshold = 40,minLineLength = 60,maxLineGap = 10)
     
         if linesP is not None:
             for i in range(0, len(linesP)):
