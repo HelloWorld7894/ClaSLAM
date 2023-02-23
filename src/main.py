@@ -35,7 +35,7 @@ def HoughLines(image_in, image_out, l_color):
     OUT: BGR image
     """
 
-    lines = cv2.HoughLines(image_in, 1, np.pi / 180, 135, None, 0, 0)
+    lines = cv2.HoughLinesP(image_in, 1, np.pi / 180, 100, 5, 20)
     line_points = []
 
     if lines is not None:
@@ -53,6 +53,10 @@ def HoughLines(image_in, image_out, l_color):
             line_points.append([pt1, pt2])
 
     return image_out, line_points
+
+def RANSAC():
+    #this is going to be painful as hell
+    pass
 
 def Adjust_Gamma(image, gamma):
     """
@@ -246,7 +250,7 @@ def DrawLines(lines, img, lcolor):
 #main code
 
 vid = cv2.VideoCapture(0)
-while(True):
+while True:
       
     ret, frame = vid.read()
 
@@ -263,12 +267,12 @@ while(True):
 
     #clustering
     img = Adjust_Gamma(frame, 0.4)
-    img_cluster = K_Clustering(img, 7)
+    img_cluster = K_Clustering(img, 6)
 
     img_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
     #sometimes, human faces have different brightness (in clusters), so by using haarcascaddes, we are going to filter faces out
-    #img_cluster = FaceDetect.detectFace(frame, img_cluster)
+    img_cluster = FaceDetect.detectFace(frame, img_cluster)
 
     #edge detection
     upper, lower = Automatic_Thresh(img_gray)
@@ -282,7 +286,7 @@ while(True):
     #
     # Fitting lines through interest points (2)
     #
-    blank, lines1 = HoughLines(img_canny, blank, (0, 0, 255))
+    blank, lines1 = HoughLines(img_canny, blank, (255, 255, 255))
 
     #
     # Cluster RGB thresholding
@@ -345,11 +349,13 @@ while(True):
     # HoughLines on sobel image
     #
 
-    blank, lines2 = HoughLines(img_sobel, blank, (0, 0, 255))
+    blank, lines2 = HoughLines(img_sobel, blank, (255, 255, 255))
 
     #
     # Line grouping by difference of angle and distance (3)
     #
+    #TODO: funguje divně na vertikální lines!
+    """
     lines = lines1 + lines2
     for line in lines:
         CalculateAngle(line)
@@ -419,11 +425,11 @@ while(True):
             lines.append(line_new)
     
     DrawLines(lines, blank2, (255, 0, 0))
+    """
         
     cv2.imshow("frame_lines", blank)
-    cv2.imshow("frame_lines_grouped", blank2)
-    cv2.imshow("frame_thresh", img_thresh)
     cv2.imshow("frame_sobel", img_sobel)
+    cv2.imshow("frame_thresh", img_thresh)
     #cv2.imshow("frame_K_means", img_cluster)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
