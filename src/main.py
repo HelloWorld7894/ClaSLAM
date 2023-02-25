@@ -7,9 +7,11 @@ import math
 cap = cv2.VideoCapture(0)
 
 def Thresh(img):
-    thresh = 50
-    img[img > thresh] = 255
-    img[img <= thresh] = 0
+    img = cv2.adaptiveThreshold(img,255,cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY,21,-10)  # SICK feature!!!
+
+    # thresh = 50
+    # img[img > thresh] = 255
+    # img[img <= thresh] = 0
 
     return img
 
