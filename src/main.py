@@ -37,7 +37,7 @@ def HoughLines(img_in, img_out, mode):
 
                 diff = 20
 
-                for line in prev_lines:
+                for line in prev_lines: #TODO: review!
                     x1 = line[0][0]
                     y1 = line[0][1]
                     x2 = line[1][0]
@@ -97,6 +97,7 @@ while True:
 
     cnts, hierarchy = cv2.findContours(blank,cv2.RETR_TREE,cv2.CHAIN_APPROX_NONE)
 
+    #TODO: doesnt seem to be useful
     for cnt in cnts:
 
         epsilon = 0.09 * cv2.arcLength(cnt, True)
