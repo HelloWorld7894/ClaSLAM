@@ -23,13 +23,21 @@ def HoughLines(img_in, img_out, mode):
             for i in range(0, len(lines)):
                 rho = lines[i][0][0]
                 theta = lines[i][0][1]
+
                 a = math.cos(theta)
                 b = math.sin(theta)
                 x0 = a * rho
                 y0 = b * rho
-                pt1 = (int(x0 + 1000*(-b)), int(y0 + 1000*(a)))
-                pt2 = (int(x0 - 1000*(-b)), int(y0 - 1000*(a)))
-                cv2.line(img_out, pt1, pt2, (0,0,255), 3, cv2.LINE_AA)
+                pt1 = (int(x0 + 500*(-b)), int(y0 + 500*(a)))
+                pt2 = (int(x0 - 500*(-b)), int(y0 - 500*(a)))
+                angle = round(math.atan((abs(pt1[1] - pt2[1]) + 1) / (abs(pt1[0] - pt2[0]) + 1)) * 180/math.pi)
+                diff = 15
+
+                if angle < diff:
+                    cv2.line(img_out, pt1, pt2, (0,0,255), 3, cv2.LINE_AA)
+                
+                elif (90 - diff) < angle < (90  + diff):
+                    cv2.line(img_out, pt1, pt2, (255,0,0), 3, cv2.LINE_AA)
 
     elif mode == "p":
         linesP = cv2.HoughLinesP(img_in,rho = 1,theta = 1*np.pi/180,threshold = 40,minLineLength = 60,maxLineGap = 10)
@@ -44,7 +52,7 @@ def HoughLines(img_in, img_out, mode):
 while True:
     # Capture frame-by-frame
     ret, img = cap.read()
-    test = img.copy()
+    blank = np.zeros(img.shape, dtype=np.uint8)
 
     img = cv2.GaussianBlur(img, (3, 3), 0)
     gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
@@ -61,10 +69,10 @@ while True:
     #dst = cv2.blur(dst,(5,5))
     #dst = Thresh(dst)
 
-    HoughLines(dst, test, "p")
+    HoughLines(dst, blank, "std")
             
     cv2.imshow("Source", img)
-    cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", test)
+    cv2.imshow("Detected Lines (in red) - Probabilistic Line Transform", blank)
     cv2.imshow("sobel", dst)
 
 
