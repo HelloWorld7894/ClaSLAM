@@ -20,6 +20,8 @@ def HoughLines(img_in, img_out, mode):
         lines = cv2.HoughLines(img_in, 1, np.pi / 180, 150, None, 0, 0)
 
         if lines is not None:
+            prev_lines = []
+            break_now = False
             for i in range(0, len(lines)):
                 rho = lines[i][0][0]
                 theta = lines[i][0][1]
@@ -28,18 +30,37 @@ def HoughLines(img_in, img_out, mode):
                 b = math.sin(theta)
                 x0 = a * rho
                 y0 = b * rho
-                pt1 = (int(x0 + 500*(-b)), int(y0 + 500*(a)))
-                pt2 = (int(x0 - 500*(-b)), int(y0 - 500*(a)))
+                pt1 = (int(x0 + 500*(-b)), int(y0 + 500*(a))) #x1, y1
+                pt2 = (int(x0 - 500*(-b)), int(y0 - 500*(a))) #x2, y2
                 
                 angle = round(math.atan((abs(pt1[1] - pt2[1]) + 1) / (abs(pt1[0] - pt2[0]) + 1)) * 180/math.pi)
+
                 diff = 20
 
-                if angle < diff:
+                for line in prev_lines:
+                    x1 = line[0][0]
+                    y1 = line[0][1]
+                    x2 = line[1][0]
+                    y2 = line[1][1]
 
-                    cv2.line(img_out, pt1, pt2, (255,255,255), 3, cv2.LINE_AA)
-                
-                elif (90 - diff) < angle < (90  + diff):
-                    cv2.line(img_out, pt1, pt2, (255,255,255), 3, cv2.LINE_AA)
+                    x1_curr = pt1[0]
+                    y1_curr = pt1[1]
+                    x2_curr = pt2[0]
+                    y2_curr = pt2[1]
+
+                    if abs(y1 - y1_curr) < diff or abs(y2 - y2_curr) < diff: #line grouping needed only on y-axis
+                        break_now = True
+
+                if not break_now:
+                    if angle < diff or abs(180 - angle) < diff:
+                        prev_lines.append([pt1, pt2, angle])
+                        cv2.line(img_out, pt1, pt2, (255,255,255), 3, cv2.LINE_AA)
+                    
+                    elif (90 - diff) < angle < (90  + diff):
+                        prev_lines.append([pt1, pt2])
+                        cv2.line(img_out, pt1, pt2, (255,255,255), 3, cv2.LINE_AA)
+
+                break_now = False
 
     elif mode == "p":
         linesP = cv2.HoughLinesP(img_in,rho = 1,theta = 1*np.pi/180,threshold = 40,minLineLength = 60,maxLineGap = 10)
